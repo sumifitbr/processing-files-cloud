@@ -248,3 +248,70 @@ def concat_fields(data: pd.DataFrame, special_functions_str: str) -> pd.DataFram
     #data = data.drop(columns=[column1, column2])
 
     return data
+
+# Função para recuperar corretamente a fecha_ref de cada arquivo
+def extract_fecha_ref(str_arquivo):
+    # Captura todas as sequências de 8 dígitos
+    file_findall = re.findall(r'\d{8}', str_arquivo)
+
+    # Filtramos apenas os blocos de 8 dígitos que NÃO fazem parte de sequências maiores
+    validadet_fecha_ref = [data for data in file_findall if re.search(rf'\D{data}\D', f"_{str_arquivo}_")]
+
+    if validadet_fecha_ref:
+        # Pegamos a última data válida (mais próxima do final do nome do arquivo)
+        fecha_ref = validadet_fecha_ref[-1]
+        return datetime.strptime(fecha_ref, '%Y%m%d').strftime('%Y-%m-%d')
+    else:
+        # Se não encontrar uma data válida, retorna a data atual
+        return datetime.now().strftime('%Y%m%d')
+    
+def apply_special_functions(data,special_function_str):
+# Função SPECIAL FUNCTIONS
+# Essa função irá receber nomes e parametros do campo special_functions no JSON PARAMETERS
+# Quando o parametro special_functions for <> de NULL o que estiver configurado será executado
+# na def_process_file_generic
+#
+# Exemplo para cadastro no JSON PARAMETERS
+# "special_functions":"somavalores:col1:col2:col_soma,multiplica:col3:col4:col_prod"
+# Onde:
+#   somavalores --> é o nome da função
+#   col1 --> primeiro argumento da função
+#   col2 --> segundo argumento da função
+#   col_soma --> é a nova coluna que vai receber o calculo da função em special_functions.py e que irá ser gravada no dataframe de saida com o resultado
+    if special_function_str in ["NULL",""]:
+        print('--> Nenhuma função especial aplicada.')
+        return data
+    
+    functions = [func.strip() for func in special_function_str.split(",") if func.strip()] # separador de funções sempre virgula
+
+    for func_def in functions:
+        print(f"Valor da func_def: {func_def}")
+        parts = func_def.split(":")
+        func_name = parts[0]
+        results_column = parts[-1]
+        #func_name = "concat_fields"
+        #results_column = "fecha_hora"
+        print("---------------------------------------------")
+
+        # Busca dinamicamente a função definida no codigo
+        func = globals().get(func_name)
+        if not callable(func):
+            print(f"--> Função '{func_name}' não definida no codigo...ignorando.")
+            continue
+
+        try:
+            # Aplica a função e adiciona o resultado com uma nova coluna
+            data.apply(lambda row: func(data, func_def), axis=1)
+            print(f"--> Função: '{func_name}' aplicada com sucesso com os argumentos: {func_def}, o resultado na coluna: {results_column}")
+        except Exception as e:
+            print({str(e)})
+            print(f"Erro ao aplicar a função especial '{func_name}' e argumentos {func_def}: {str(e)}")
+            send_mail_exception(
+                file_name=file_path,
+                process_name=f"Error: Special Function: {func_name}. Argumentos utilizados: {func_def}",
+                error_type=type(e).__name__,
+                additional_info=str(e)
+            )
+            raise            
+    
+    return data    
