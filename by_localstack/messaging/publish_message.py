@@ -1,14 +1,20 @@
 import boto3
 from botocore.exceptions import ClientError
-from secrets.get_secrets import get_secret # Implementar aqui o secret_manager
+from secrets.get_secrets import AWS_REGION, SNS_TOPIC_ARN
 
-# Função para envio de mensagens via SNS
-def publish_message_to_sns(subject, message, region_name, topic_arn):
+AWS_ENDPOINT = "http://localhost:4566"  # LocalStack endpoint
+
+
+def publish_message_to_sns(subject, message, region_name=AWS_REGION, topic_arn=SNS_TOPIC_ARN):
     """
-    Publica uma mensagem no tópico SNS.
+    Publica uma mensagem no tópico SNS (LocalStack).
     """
     try:
-        sns_client = boto3.client("sns", region_name=region_name)
+        sns_client = boto3.client(
+            "sns",
+            region_name=region_name,
+            endpoint_url=AWS_ENDPOINT
+        )
         response = sns_client.publish(
             TopicArn=topic_arn,
             Subject=subject,
@@ -19,7 +25,7 @@ def publish_message_to_sns(subject, message, region_name, topic_arn):
         print(f"Erro ao enviar mensagem SNS: {e}")
         raise
 
-# Função para criar mensagens de erro para envio SNS
+
 def send_mail_exception(file_name, process_name, error_type, additional_info):
     """
     Gera e envia a mensagem formatada via SNS para alertar sobre exceptions.
@@ -38,4 +44,7 @@ def send_mail_exception(file_name, process_name, error_type, additional_info):
 
     Por favor, verifique o log para mais detalhes!
     """
-    publish_message_to_sns(subject=f"Erro no processo {process_name}", message=message_email, region_name="us-east-1", topic_arn="meu_topico_aqui")
+    publish_message_to_sns(
+        subject=f"Erro no processo {process_name}",
+        message=message_email
+    )
